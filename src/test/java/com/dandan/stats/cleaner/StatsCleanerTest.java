@@ -4,8 +4,6 @@
  */
 package com.dandan.stats.cleaner;
 
-import static com.dandan.stats.cleaner.StatsCleaner.myCleanStats;
-import static com.dandan.stats.cleaner.StatsCleaner.shouldDeleteKey;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
@@ -17,7 +15,6 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import static org.junit.Assert.*;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.resps.ScanResult;
 import redis.embedded.RedisServer;
@@ -64,8 +61,6 @@ public class StatsCleanerTest {
     @Test
     public void myCleanStats() {
 
-        String fechaLimite = StatsCleaner.calcFechaLimite("90"); // fecha actual - 3 meses o 90 dias
-        System.out.println("Fecha limite: " + fechaLimite);
         Random random = new Random();
 
         try {
@@ -92,12 +87,15 @@ public class StatsCleanerTest {
                 String xkey = it.next().toString();
                 System.out.println("key:" + xkey);
             }
+            
+           // jedis.get(key)
 
-            jedis.close();
 
-            StatsCleaner.myCleanStats(jedis, fechaLimite);
-
-            jedis = new Jedis(host, 6379);
+            //jedis = new Jedis(host, 6379);
+            
+            String dias = "90";            
+            StatsCleaner.myCleanStats(jedis, dias);
+            
             cursor = "0";
 
             scanResult = jedis.scan(cursor);

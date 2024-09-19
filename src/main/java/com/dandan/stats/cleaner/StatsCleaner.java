@@ -18,19 +18,29 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import redis.clients.jedis.JedisClientConfig;
 import redis.clients.jedis.params.ScanParams;
 
 public class StatsCleaner {
 
     private static final int BATCHSIZE = 1000;
     private static final String matchPattern = "stats/.*/(month|week|day|hour|minute):(?<year>\\d{4})(?<month>\\d{2})(?<day>\\d{2})\\d*$";
+    private static final String matchPatterninit = "stats/*";
 
+    
     public static void main(String[] args) {
         if (args.length < 2) {
             System.out.println("Usage: java StatsCleaner <redis://host:port/DB> <days>");
             System.out.println("Usage: java StatsCleaner redis://127.0.0.1:6379/2  90");
             System.out.println("The search pattern is stats/*/*");
             System.exit(1);
+        }
+
+        String password = System.getenv().get("sc_pass");
+
+        if (password.isBlank() || password.isEmpty()) {
+            System.out.println("No sc_pass found. Please set export sc_pass=redis_password");
+            //System.exit(1);
         }
 
         String host = args[0];
@@ -137,26 +147,28 @@ public class StatsCleaner {
 
     public static void myCleanStats(Jedis jedis, String dias) throws IOException {
 
-        System.out.println("DBsize: " + jedis.dbSize());
+        System.out.println("Total Keys on DB: " + jedis.dbSize());
 
         String fechaLimite = calcFechaLimite(dias);
-        System.out.println("Fecha Limite: " + fechaLimite);
+        System.out.println("Threshold Date: " + fechaLimite);
+        
+        int deletedCounter = 0;
+
 
         try {
             String cursor = "0";
             do {
-                ScanParams scanParams = new ScanParams().count(BATCHSIZE).match(matchPattern);
+                ScanParams scanParams = new ScanParams().count(BATCHSIZE).match(matchPatterninit);
                 ScanResult<String> scanResult = jedis.scan(cursor, scanParams);
                 cursor = scanResult.getCursor();
                 List<String> keys = scanResult.getResult();
-                
-                while (keys.isEmpty()) {
-                    cursor = scanResult.getCursor();
-                    keys = scanResult.getResult();
+
+                if(keys.isEmpty()){
+                    continue;
+                }else{
+                    System.out.print(".");
 
                 }
-
-                System.out.print("." + keys.size());
 
                 Pipeline pipeline = jedis.pipelined();
 
@@ -164,6 +176,7 @@ public class StatsCleaner {
                 while (it.hasNext()) {
                     String key = it.next().toString();
                     if (shouldDeleteKey(key, fechaLimite)) {
+                        deletedCounter++;
                         pipeline.del(key);
                         System.out.println("Deleting: " + key);
 
@@ -178,7 +191,11 @@ public class StatsCleaner {
         } catch (Exception e) {
             System.out.println("\n*** ERROR: " + e.getMessage());
             System.out.print("\n*** ERROR: " + e.getMessage() + "\n");
+        }finally {
+            System.out.println("\n" + deletedCounter + " keys have been deleted.");
+            jedis.close();
         }
+
     }
 
     /* Decide si la clave debe ser eliminada de acuerdo a si la fecha de la clave, es menor o igual a fechaLimite */
