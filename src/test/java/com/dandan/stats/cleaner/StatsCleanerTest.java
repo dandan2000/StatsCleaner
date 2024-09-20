@@ -5,6 +5,8 @@
 package com.dandan.stats.cleaner;
 
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
@@ -12,6 +14,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.junit.After;
 import org.junit.AfterClass;
+import static org.junit.Assert.assertEquals;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -46,9 +49,15 @@ public class StatsCleanerTest {
 
     @Test
     public void calcFechaLimite() {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
+
         Integer days = 90;
         String fl = StatsCleaner.calcFechaLimite(days);
         System.out.println("Fecha limite: " + fl);
+
+        Calendar calendar = Calendar.getInstance();
+        calendar.add(Calendar.DATE, (days * -1));
+        assertEquals("Date must be equals", sdf.format(calendar.getTime()), fl);
 
     }
 
@@ -62,6 +71,8 @@ public class StatsCleanerTest {
     public void myCleanStats() {
 
         Random random = new Random();
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
+        Long keyresult = 0L;
 
         try {
             RedisServer redisServer = new RedisServer(6379);
@@ -70,12 +81,23 @@ public class StatsCleanerTest {
             String host = "localhost";
             Jedis jedis = new Jedis(host, 6379);
 
-            String key = "stats/{service:10560}/cinstance:2ed39d13/metric:10680/hour:2023061513";
-            System.out.println("La key:" + key);
+            Calendar calendar = Calendar.getInstance();
+            calendar.add(Calendar.DATE, (-120));
+            String datekey = sdf.format(calendar.getTime());
 
-            jedis.set("stats/{service:10560}/cinstance:2ed39d13/metric:10680/hour:2024091513", ((Integer) random.nextInt(100)).toString());
-            jedis.set("stats/{service:10561}/cinstance:2ed39d13/metric:10681/hour:20240101", ((Integer) random.nextInt(100)).toString());
-            jedis.set("stats/{service:10562}/cinstance:2ed39d13/metric:10682/hour:2024061518", ((Integer) random.nextInt(100)).toString());
+            jedis.set("stats/{service:10560}/cinstance:2ed39d13/metric:10680/hour:" + datekey + "13", ((Integer) random.nextInt(100)).toString());
+
+            calendar = Calendar.getInstance();
+            calendar.add(Calendar.DATE, (-100));
+            datekey = sdf.format(calendar.getTime());
+
+            jedis.set("stats/{service:10561}/cinstance:2ed39d13/metric:10681/hour:" + datekey, ((Integer) random.nextInt(100)).toString());
+
+            calendar = Calendar.getInstance();
+            calendar.add(Calendar.DATE, (-10));
+            datekey = sdf.format(calendar.getTime());
+
+            jedis.set("stats/{service:10562}/cinstance:2ed39d13/metric:10682/hour:" + datekey + "1518", ((Integer) random.nextInt(100)).toString());
 
             String cursor = "0";
             ScanResult<String> scanResult = jedis.scan(cursor);
@@ -87,21 +109,17 @@ public class StatsCleanerTest {
                 String xkey = it.next().toString();
                 System.out.println("key:" + xkey);
             }
-            
-           // jedis.get(key)
 
-
-            //jedis = new Jedis(host, 6379);
-            
-            Integer days = 90;            
+            Integer days = 90;
             StatsCleaner.myCleanStats(jedis, days);
-            
+
             cursor = "0";
 
             scanResult = jedis.scan(cursor);
             cursor = scanResult.getCursor();
             List<String> keys2 = scanResult.getResult();
-            System.out.println("Cant keys:" + keys2.size());
+            System.out.println("Number of keys:" + keys2.size());
+            keyresult = Long.valueOf(keys2.size());
 
             Iterator iter = keys2.iterator();
             while (iter.hasNext()) {
@@ -111,13 +129,8 @@ public class StatsCleanerTest {
 
             jedis.close();
 
-            boolean result;
+            assertEquals("Should return only 1 key", keyresult, Long.valueOf(1));
 
-            //result = StatsCleaner.shouldDeleteKey(key, yearMonthDayThreshold);
-//        if(!result){
-//            System.out.println(":" + result + ":");
-//            fail("Deberia se borrada.");            
-//        }
             redisServer.stop();
         } catch (IOException ex) {
             Logger.getLogger(StatsCleanerTest.class.getName()).log(Level.SEVERE, null, ex);

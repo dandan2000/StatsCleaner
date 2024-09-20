@@ -8,10 +8,8 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Pipeline;
 import redis.clients.jedis.resps.ScanResult;
 
-import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.time.Instant;
 import java.util.Calendar;
 import java.util.Iterator;
 import java.util.List;
@@ -24,49 +22,69 @@ public class StatsCleaner {
     private static final int BATCHSIZE = 1000;
     private static final String MATCHPATTERN = "stats/.*/(month|week|day|hour|minute):(?<year>\\d{4})(?<month>\\d{2})(?<day>\\d{2})\\d*$";
     private static final String MATCHPATTERNSCAN = "stats/*";
+    private static String password = "";
 
-    
     public static void main(String[] args) {
-        if (args.length < 2) {
-            System.out.println("Usage: java StatsCleaner <redis://:password@host:port/DB> <days>");
-            System.out.println("Usage: java StatsCleaner redis://:pass1234@127.0.0.1:6379/2  90");
-            System.out.println("The search pattern is "+ MATCHPATTERNSCAN);
+        if (args.length < 4) {
+            // days host port db pass
+            // redis://: + pass @ + host + : + port + / + db 
+            // <redis://:pass_env@host:port/DB> <days>
+            System.out.println("Usage: java StatsCleaner days host port DB <password>");
+            System.out.println("Usage: java StatsCleaner 90 127.0.0.1 6379 2 pass1234");
+            System.out.println("For password setting also you can use export sc_pass=redis_password");
+            System.out.println("If sc_pass is present it take precedence");
+            System.out.println("The delete pattern is " + MATCHPATTERN);
             System.exit(1);
         }
 
-        String password = System.getenv().get("sc_pass");
+        //String days = args[0];
+        Integer days = Integer.valueOf(args[0]);
+        String host = args[1];
+        String port = args[2];
+        String db = args[3];
 
-        if (password.isBlank() || password.isEmpty()) {
-            System.out.println("No sc_pass found. Please set export sc_pass=redis_password");
-            //System.exit(1);
+        if (args.length == 5) {
+            password = args[4];
         }
 
-        String host = args[0];
-        String days = args[1];
+        String pass_env = System.getenv().get("sc_pass");
+
+        if (pass_env != null && !(pass_env.isBlank() || pass_env.isEmpty())) {
+            System.out.println("Using password from ENV sc_pass");
+            password = pass_env;
+        }
+
+        String db_url = "redis://:" + password + "@" + host + ":" + port + "/" + db;
+
+        if (days < 1) {
+            System.out.println("Days must be a natural number");
+            System.exit(1);
+        }
+
         Jedis jedis = null;
 
         try {
-            jedis = new Jedis(host);
+
+            jedis = new Jedis(db_url);
             myCleanStats(jedis, days);
-        } catch (IOException e) {
-            System.out.println("Error... " + e.getMessage());
+
+        } catch (Exception e) {
+            System.out.println("Error Caused by: " + e.getMessage());
         } finally {
             if (jedis != null) {
                 jedis.close();
             }
-
         }
     }
 
-    public static void myCleanStats(Jedis jedis, String dias) throws IOException {
+    public static void myCleanStats(Jedis jedis, Integer days) throws IOException {
 
         System.out.println("Total Keys on DB: " + jedis.dbSize());
 
-        String fechaLimite = calcFechaLimite(dias);
+        String fechaLimite = calcFechaLimite(days);
         System.out.println("Threshold Date: " + fechaLimite);
-        
-        int deletedCounter = 0;
 
+        int deletedCounter = 0;
 
         try {
             String cursor = "0";
@@ -76,9 +94,9 @@ public class StatsCleaner {
                 cursor = scanResult.getCursor();
                 List<String> keys = scanResult.getResult();
 
-                if(keys.isEmpty()){
+                if (keys.isEmpty()) {
                     continue;
-                }else{
+                } else {
                     System.out.print(".");
 
                 }
@@ -97,14 +115,14 @@ public class StatsCleaner {
                 }
 
                 pipeline.sync();
-                Thread.sleep(10);
+                Thread.sleep(20);
 
             } while (!cursor.equals("0"));
 
         } catch (Exception e) {
             System.out.println("\n*** ERROR: " + e.getMessage());
             System.out.print("\n*** ERROR: " + e.getMessage() + "\n");
-        }finally {
+        } finally {
             System.out.println("\n" + deletedCounter + " keys have been deleted.");
             jedis.close();
         }
@@ -129,10 +147,9 @@ public class StatsCleaner {
     }
 
     /* No se limita desde la fecha actual hasta la fecha limite, anterior a esta se eliminara */
-    public static String calcFechaLimite(String dias) {
+    public static String calcFechaLimite(Integer dias) {
         Calendar calendar = Calendar.getInstance();
-        Integer numDias = Integer.parseInt(dias) * -1;
-        calendar.add(Calendar.DATE, numDias); // se suman dias negativo.. se restan
+        calendar.add(Calendar.DATE, (dias * -1)); // se suman dias negativo.. se restan
         SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
         return sdf.format(calendar.getTime());
     }
