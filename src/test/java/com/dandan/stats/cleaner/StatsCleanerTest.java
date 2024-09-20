@@ -46,8 +46,8 @@ public class StatsCleanerTest {
 
     @Test
     public void calcFechaLimite() {
-        String dias = "90";
-        String fl = StatsCleaner.calcFechaLimite(dias);
+        Integer days = 90;
+        String fl = StatsCleaner.calcFechaLimite(days);
         System.out.println("Fecha limite: " + fl);
 
     }
@@ -93,8 +93,8 @@ public class StatsCleanerTest {
 
             //jedis = new Jedis(host, 6379);
             
-            String dias = "90";            
-            StatsCleaner.myCleanStats(jedis, dias);
+            Integer days = 90;            
+            StatsCleaner.myCleanStats(jedis, days);
             
             cursor = "0";
 
