@@ -10,11 +10,15 @@ import redis.clients.jedis.resps.ScanResult;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Calendar;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import redis.clients.jedis.JedisSentinelPool;
 import redis.clients.jedis.params.ScanParams;
 
 public class StatsCleaner {
@@ -24,24 +28,33 @@ public class StatsCleaner {
     private static final String MATCHPATTERNSCAN = "stats/*";
     private static String password = "";
 
+    @SuppressWarnings("ConvertToTryWithResources")
     public static void main(String[] args) {
         if (args.length < 4) {
             // days host port db pass
             // redis://: + pass @ + host + : + port + / + db 
             // <redis://:pass_env@host:port/DB> <days>
-            System.out.println("Usage: java StatsCleaner days host port DB <password>");
-            System.out.println("Usage: java StatsCleaner 90 127.0.0.1 6379 2 pass1234");
+            System.out.println("Usage: java StatsCleaner days sentinel_host:port,sentinel_host:port;... DB masterSetName <password>");
+            System.out.println("Usage: java StatsCleaner 90 127.0.0.1:26379,10.0.0.1:26379 2 mymaster pass1234");
             System.out.println("For password setting also you can use export sc_pass=redis_password");
             System.out.println("If sc_pass is present it take precedence");
             System.out.println("The delete pattern is " + MATCHPATTERN);
             System.exit(1);
         }
 
-        //String days = args[0];
+        //TODO: password hay dos, la del redis y la de sentinels pero solo estoy tomando 1
         Integer days = Integer.valueOf(args[0]);
-        String host = args[1];
-        String port = args[2];
-        String db = args[3];
+
+        String hosts = args[1];
+
+        String db = args[2];
+
+        String MASTER_NAME = args[3];
+
+        //String MASTER_NAME = "mymaster";
+        Set<String> sentinels = new HashSet<>();
+        String[] sentinelArray = hosts.split(",");
+        sentinels.addAll(Arrays.asList(sentinelArray));
 
         if (args.length == 5) {
             password = args[4];
@@ -54,27 +67,26 @@ public class StatsCleaner {
             password = pass_env;
         }
 
-        String db_url = "redis://:" + password + "@" + host + ":" + port + "/" + db;
-
         if (days < 1) {
             System.out.println("Days must be a natural number");
             System.exit(1);
         }
 
-        Jedis jedis = null;
+        // Crear el pool de Jedis con Sentinel... JedisSentinelPool elege el master para la conexion
+        // password master, password sentinel en ese orden
+        try (JedisSentinelPool sentinelPool = new JedisSentinelPool(MASTER_NAME, sentinels, password, password)) {
 
-        try {
+            try (Jedis jedis = sentinelPool.getResource()) {
 
-            jedis = new Jedis(db_url);
-            myCleanStats(jedis, days);
+                jedis.select(Integer.parseInt(db));
 
+                myCleanStats(jedis, days);
+
+            }
         } catch (Exception e) {
             System.out.println("Error Caused by: " + e.getMessage());
-        } finally {
-            if (jedis != null) {
-                jedis.close();
-            }
         }
+
     }
 
     public static void myCleanStats(Jedis jedis, Integer days) throws IOException {
