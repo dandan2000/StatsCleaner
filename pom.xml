@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.dandan</groupId>
     <artifactId>stats-cleaner</artifactId>
-    <version>1</version>
+    <version>2</version>
     <packaging>jar</packaging>
     <dependencies>
         <dependency>

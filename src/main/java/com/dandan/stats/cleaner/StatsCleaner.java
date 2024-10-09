@@ -26,23 +26,24 @@ public class StatsCleaner {
     private static final int BATCHSIZE = 1000;
     private static final String MATCHPATTERN = "stats/.*/(month|week|day|hour|minute):(?<year>\\d{4})(?<month>\\d{2})(?<day>\\d{2})\\d*$";
     private static final String MATCHPATTERNSCAN = "stats/*";
-    private static String password = "";
-
+    private static String masterPassword = "";
+    private static String sentinelPassword = "";
+    
+    
     @SuppressWarnings("ConvertToTryWithResources")
     public static void main(String[] args) {
         if (args.length < 4) {
             // days host port db pass
             // redis://: + pass @ + host + : + port + / + db 
             // <redis://:pass_env@host:port/DB> <days>
-            System.out.println("Usage: java StatsCleaner days sentinel_host:port,sentinel_host:port;... DB masterSetName <password>");
-            System.out.println("Usage: java StatsCleaner 90 127.0.0.1:26379,10.0.0.1:26379 2 mymaster pass1234");
+            System.out.println("Usage: java StatsCleaner days sentinel_host:port,sentinel_host:port;... DB masterSetName masterPassword sentinelPassword");
+            System.out.println("Usage: java StatsCleaner 90 127.0.0.1:26379,10.0.0.1:26379 2 mymaster pass1234 pass1111");
             System.out.println("For password setting also you can use export sc_pass=redis_password");
             System.out.println("If sc_pass is present it take precedence");
             System.out.println("The delete pattern is " + MATCHPATTERN);
             System.exit(1);
         }
 
-        //TODO: password hay dos, la del redis y la de sentinels pero solo estoy tomando 1
         Integer days = Integer.valueOf(args[0]);
 
         String hosts = args[1];
@@ -51,22 +52,25 @@ public class StatsCleaner {
 
         String MASTER_NAME = args[3];
 
-        //String MASTER_NAME = "mymaster";
         Set<String> sentinels = new HashSet<>();
         String[] sentinelArray = hosts.split(",");
         sentinels.addAll(Arrays.asList(sentinelArray));
 
-        if (args.length == 5) {
-            password = args[4];
+        if (args.length == 6) {
+            masterPassword = args[4];
+            sentinelPassword = args[5];            
         }
 
-        String pass_env = System.getenv().get("sc_pass");
+        String mast_pass_env = System.getenv().get("sc_master_pass");
+        String sent_pass_env = System.getenv().get("sc_sentinel_pass");
 
-        if (pass_env != null && !(pass_env.isBlank() || pass_env.isEmpty())) {
-            System.out.println("Using password from ENV sc_pass");
-            password = pass_env;
+        if (mast_pass_env != null && sent_pass_env != null  && !(mast_pass_env.isBlank() || mast_pass_env.isEmpty() || sent_pass_env.isBlank() || sent_pass_env.isEmpty())) {
+            System.out.println("Using password from ENV sc_master_pass and sc_sentinel_pass");
+            masterPassword = mast_pass_env;
+            sentinelPassword = mast_pass_env;            
         }
 
+        
         if (days < 1) {
             System.out.println("Days must be a natural number");
             System.exit(1);
@@ -74,7 +78,7 @@ public class StatsCleaner {
 
         // Crear el pool de Jedis con Sentinel... JedisSentinelPool elege el master para la conexion
         // password master, password sentinel en ese orden
-        try (JedisSentinelPool sentinelPool = new JedisSentinelPool(MASTER_NAME, sentinels, password, password)) {
+        try (JedisSentinelPool sentinelPool = new JedisSentinelPool(MASTER_NAME, sentinels, masterPassword, sentinelPassword)) {
 
             try (Jedis jedis = sentinelPool.getResource()) {
 
