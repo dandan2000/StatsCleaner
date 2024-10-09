@@ -27,17 +27,16 @@ public class StatsCleaner {
     private static final String MATCHPATTERN = "stats/.*/(month|week|day|hour|minute):(?<year>\\d{4})(?<month>\\d{2})(?<day>\\d{2})\\d*$";
     private static final String MATCHPATTERNSCAN = "stats/*";
     private static String masterPassword = "";
-    private static String sentinelPassword = "";
-    
-    
+//    private static String sentinelPassword = "";
+
     @SuppressWarnings("ConvertToTryWithResources")
     public static void main(String[] args) {
         if (args.length < 4) {
             // days host port db pass
             // redis://: + pass @ + host + : + port + / + db 
             // <redis://:pass_env@host:port/DB> <days>
-            System.out.println("Usage: java StatsCleaner days sentinel_host:port,sentinel_host:port;... DB masterSetName masterPassword sentinelPassword");
-            System.out.println("Usage: java StatsCleaner 90 127.0.0.1:26379,10.0.0.1:26379 2 mymaster pass1234 pass1111");
+            System.out.println("Usage: java StatsCleaner days sentinel_host:port,sentinel_host:port;... DB masterSetName <masterPassword>");
+            System.out.println("Usage: java StatsCleaner 90 127.0.0.1:26379,10.0.0.1:26379 2 mymaster pass1234");
             System.out.println("For password setting also you can use export sc_pass=redis_password");
             System.out.println("If sc_pass is present it take precedence");
             System.out.println("The delete pattern is " + MATCHPATTERN);
@@ -56,21 +55,21 @@ public class StatsCleaner {
         String[] sentinelArray = hosts.split(",");
         sentinels.addAll(Arrays.asList(sentinelArray));
 
-        if (args.length == 6) {
+        if (args.length == 5) {
             masterPassword = args[4];
-            sentinelPassword = args[5];            
+            //sentinelPassword = args[5];            
         }
 
         String mast_pass_env = System.getenv().get("sc_master_pass");
-        String sent_pass_env = System.getenv().get("sc_sentinel_pass");
+//        String sent_pass_env = System.getenv().get("sc_sentinel_pass");
 
-        if (mast_pass_env != null && sent_pass_env != null  && !(mast_pass_env.isBlank() || mast_pass_env.isEmpty() || sent_pass_env.isBlank() || sent_pass_env.isEmpty())) {
+//        if (mast_pass_env != null && sent_pass_env != null  && !(mast_pass_env.isBlank() || mast_pass_env.isEmpty() || sent_pass_env.isBlank() || sent_pass_env.isEmpty())) {
+        if (mast_pass_env != null && !(mast_pass_env.isBlank() || mast_pass_env.isEmpty())) {
             System.out.println("Using password from ENV sc_master_pass and sc_sentinel_pass");
             masterPassword = mast_pass_env;
-            sentinelPassword = mast_pass_env;            
+//            sentinelPassword = mast_pass_env;
         }
 
-        
         if (days < 1) {
             System.out.println("Days must be a natural number");
             System.exit(1);
@@ -78,7 +77,7 @@ public class StatsCleaner {
 
         // Crear el pool de Jedis con Sentinel... JedisSentinelPool elege el master para la conexion
         // password master, password sentinel en ese orden
-        try (JedisSentinelPool sentinelPool = new JedisSentinelPool(MASTER_NAME, sentinels, masterPassword, sentinelPassword)) {
+        try (JedisSentinelPool sentinelPool = new JedisSentinelPool(MASTER_NAME, sentinels, masterPassword)) {
 
             try (Jedis jedis = sentinelPool.getResource()) {
 
