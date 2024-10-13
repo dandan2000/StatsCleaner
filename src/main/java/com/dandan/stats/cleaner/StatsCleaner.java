@@ -133,12 +133,18 @@ public class StatsCleaner {
                 Thread.sleep(20);
 
             } while (!cursor.equals("0"));
+            
+            
+            System.out.println("\n" + deletedCounter + " keys have been deleted.");
+            System.out.println("\nRunning BGREWRITE Command");
+            jedis.bgrewriteaof();
+
+            
 
         } catch (Exception e) {
             System.out.println("\n*** ERROR: " + e.getMessage());
             System.out.print("\n*** ERROR: " + e.getMessage() + "\n");
         } finally {
-            System.out.println("\n" + deletedCounter + " keys have been deleted.");
             jedis.close();
         }
 
